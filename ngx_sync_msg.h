@@ -44,6 +44,7 @@ typedef struct ngx_sync_msg_s {
 
 
 ngx_int_t ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *body);
+ngx_int_t ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *body);
 
 
 extern ngx_flag_t ngx_sync_msg_enable;

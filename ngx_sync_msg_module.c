@@ -435,6 +435,24 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
 ngx_int_t
 ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *body)
 {
+    ngx_int_t         rc;
+    ngx_slab_pool_t  *shpool;
+
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    rc = ngx_sync_msg_send_locked(title, body);
+
+    ngx_shmtx_unlock(&shpool->mutex);
+
+    return rc;
+}
+
+
+ngx_int_t
+ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *body)
+{
     ngx_sync_msg_t        *msg;
     ngx_core_conf_t       *ccf;
     ngx_slab_pool_t       *shpool;
