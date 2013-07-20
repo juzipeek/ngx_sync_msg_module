@@ -61,16 +61,16 @@ static ngx_http_module_t  ngx_sync_msg_module_ctx = {
 
 ngx_module_t  ngx_sync_msg_module = {
     NGX_MODULE_V1,
-    &ngx_sync_msg_module_ctx,    /* module context */
-    ngx_sync_msg_commands,       /* module directives */
-    NGX_HTTP_MODULE,             /* module type */
-    NULL,                        /* init master */
-    NULL,                        /* init module */
-    ngx_sync_msg_init_process,   /* init process */
-    NULL,                        /* init thread */
-    NULL,                        /* exit thread */
-    ngx_sync_msg_exit_process,   /* exit process */
-    NULL,                        /* exit master */
+    &ngx_sync_msg_module_ctx,       /* module context */
+    ngx_sync_msg_commands,          /* module directives */
+    NGX_HTTP_MODULE,                /* module type */
+    NULL,                           /* init master */
+    NULL,                           /* init module */
+    ngx_sync_msg_init_process,      /* init process */
+    NULL,                           /* init thread */
+    NULL,                           /* exit thread */
+    ngx_sync_msg_exit_process,      /* exit process */
+    NULL,                           /* exit master */
     NGX_MODULE_V1_PADDING
 };
 
@@ -429,6 +429,86 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
     ngx_destroy_pool(pool);
 
     return;
+}
+
+
+ngx_int_t
+ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *body)
+{
+    ngx_sync_msg_t        *msg;
+    ngx_core_conf_t       *ccf;
+    ngx_slab_pool_t       *shpool;
+    ngx_sync_msg_shctx_t  *sh;
+
+    ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
+                                           ngx_core_module);
+
+    sh = ngx_sync_msg_global_ctx.sh;
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    msg = ngx_slab_alloc_locked(shpool, sizeof(ngx_sync_msg_t));
+    if (msg == NULL) {
+        goto failed;
+    }
+
+    ngx_memzero(msg, sizeof(ngx_sync_msg_t));
+
+    msg->count = 0;
+    msg->pid = ngx_slab_alloc_locked(shpool,
+                                     sizeof(ngx_pid_t) * ccf->worker_processes);
+
+    if (msg->pid == NULL) {
+        goto failed;
+    }
+
+    ngx_memzero(msg->pid, sizeof(ngx_pid_t) * ccf->worker_processes);
+    msg->pid[0] = ngx_pid;
+    msg->count++;
+
+    msg->title.data = ngx_slab_alloc_locked(shpool, title->len);
+    if (msg->title.data == NULL) {
+        goto failed;
+    }
+
+    ngx_memcpy(msg->title.data, title->data, title->len);
+    msg->title.len = title->len;
+
+    if (body) {
+        msg->content.data = ngx_slab_alloc_locked(shpool,
+                                                  body->last - body->pos);
+        if (msg->content.data == NULL) {
+            goto failed;
+        }
+
+        ngx_memcpy(msg->content.data, body->pos, body->last - body->pos);
+        msg->content.len = body->last - body->pos;
+
+    } else {
+        msg->content.data = NULL;
+        msg->content.len = 0;
+    }
+
+    sh->version++;
+
+    if (sh->version == 0) {
+        sh->version = 1;
+    }
+
+    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                   "[sync_msg] send msg %V count %ui version: %ui",
+                   &msg->title, msg->count, sh->version);
+
+    ngx_queue_insert_head(&sh->msg_queue, &msg->queue);
+
+    return NGX_OK;
+
+failed:
+
+    if (msg) {
+        ngx_sync_msg_destroy_msg(shpool, msg);
+    }
+
+    return NGX_ERROR;
 }
 
 
