@@ -22,10 +22,13 @@ static void ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool,
     ngx_sync_msg_t *msg);
 static ngx_int_t ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool,
     ngx_str_t *title, ngx_str_t *content, ngx_uint_t index);
+static ngx_int_t ngx_sync_msg_dummy_crashed_filter(ngx_pid_t opid,
+    ngx_pid_t npid);
 
 
-ngx_int_t  (*ngx_sync_msg_top_read_filter) (ngx_pool_t *pool, ngx_str_t *title,
+ngx_int_t (*ngx_sync_msg_top_read_filter) (ngx_pool_t *pool, ngx_str_t *title,
     ngx_str_t *content, ngx_uint_t index);
+ngx_int_t (*ngx_sync_msg_top_crashed_filter) (ngx_pid_t opid, ngx_pid_t npid);
 
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
@@ -111,6 +114,7 @@ ngx_sync_msg_init_main_conf(ngx_conf_t *cf, void *conf)
     }
 
     ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
+    ngx_sync_msg_top_crashed_filter = ngx_sync_msg_dummy_crashed_filter;
 
     if (smcf->shm_size == NGX_CONF_UNSET_UINT) {
         smcf->shm_size = 2 * 1024 * 1024;
@@ -201,7 +205,7 @@ ngx_sync_msg_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
 static ngx_int_t
 ngx_sync_msg_init_process(ngx_cycle_t *cycle)
 {
-    ngx_int_t                    i;
+    ngx_int_t                    i, rc;
     ngx_pid_t                    pid;
     ngx_time_t                  *tp;
     ngx_msec_t                   now;
@@ -291,6 +295,12 @@ ngx_sync_msg_init_process(ngx_cycle_t *cycle)
         ngx_sync_msg_purge_msg(pid, ngx_pid);
 
         ngx_shmtx_unlock(&shpool->mutex);
+
+        rc = ngx_sync_msg_top_crashed_filter(pid, ngx_pid);
+        if (rc != NGX_OK) {
+            ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
+                          "[sync_msg] crashed filter rc: [%i]", rc);
+        }
     }
 
     return NGX_OK;
@@ -597,5 +607,12 @@ ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool, ngx_str_t *title,
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
                    "sync msg dummy read filter, module index: [%ui]", index);
 
+    return NGX_OK;
+}
+
+
+static ngx_int_t
+ngx_sync_msg_dummy_crashed_filter(ngx_pid_t opid, ngx_pid_t npid)
+{
     return NGX_OK;
 }
