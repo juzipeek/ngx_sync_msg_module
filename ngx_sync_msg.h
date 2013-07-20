@@ -39,16 +39,25 @@ typedef struct ngx_sync_msg_s {
     ngx_str_t                            title;
     ngx_str_t                            content;
     ngx_int_t                            count;
+    ngx_uint_t                           module_index;
     ngx_pid_t                           *pid;
 } ngx_sync_msg_t;
 
 
 typedef ngx_int_t (*ngx_sync_msg_filter_pt) (ngx_pool_t *pool, ngx_str_t *title,
-    ngx_str_t *content);
+    ngx_str_t *content, ngx_uint_t index);
 
 
-ngx_int_t ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *content);
-ngx_int_t ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *content);
+#define ngx_sync_msg_send(t, c, m)                                             \
+    ngx_sync_msg_send_module_index(t, c, m.index)
+#define ngx_sync_msg_send_locked(t, c, m)                                      \
+    ngx_sync_msg_send_locked_module_index(t, c, m.index)
+
+
+ngx_int_t ngx_sync_msg_send_module_index(ngx_str_t *title, ngx_buf_t *content,
+    ngx_uint_t index);
+ngx_int_t ngx_sync_msg_send_locked_module_index(ngx_str_t *title,
+    ngx_buf_t *content, ngx_uint_t index);
 
 
 extern ngx_flag_t ngx_sync_msg_enable;

@@ -1,7 +1,7 @@
 #include <ngx_sync_msg.h>
 
 
-#define NGX_SYNC_MSG_SHM_NAME_LEN 256
+#define NGX_SYNC_MSG_SHM_NAME_LEN  256
 #define ngx_sync_msg_add_timer(ev, timeout)                     \
     if (!ngx_exiting && !ngx_quit) ngx_add_timer(ev, (timeout))
 
@@ -21,11 +21,11 @@ static void ngx_sync_msg_read_msg_locked(ngx_event_t *ev);
 static void ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool,
     ngx_sync_msg_t *msg);
 static ngx_int_t ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool,
-    ngx_str_t *title, ngx_str_t *content);
+    ngx_str_t *title, ngx_str_t *content, ngx_uint_t index);
 
 
 ngx_int_t  (*ngx_sync_msg_top_read_filter) (ngx_pool_t *pool, ngx_str_t *title,
-    ngx_str_t *content);
+    ngx_str_t *content, ngx_uint_t index);
 
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
@@ -420,7 +420,8 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
         title = msg->title;
         content = msg->content;
 
-        rc = ngx_sync_msg_top_read_filter(pool, &title, &content);
+        rc = ngx_sync_msg_top_read_filter(pool, &title, &content,
+                                          msg->module_index);
         if (rc != NGX_OK) {
             ngx_log_error(NGX_LOG_ALERT, ev->log, 0,
                           "[sync_msg] read msg error, may cause the "
@@ -439,7 +440,8 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
 
 
 ngx_int_t
-ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *content)
+ngx_sync_msg_send_module_index(ngx_str_t *title, ngx_buf_t *content,
+    ngx_uint_t index)
 {
     ngx_int_t         rc;
     ngx_slab_pool_t  *shpool;
@@ -448,7 +450,7 @@ ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *content)
 
     ngx_shmtx_lock(&shpool->mutex);
 
-    rc = ngx_sync_msg_send_locked(title, content);
+    rc = ngx_sync_msg_send_locked_module_index(title, content, index);
 
     ngx_shmtx_unlock(&shpool->mutex);
 
@@ -457,7 +459,8 @@ ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *content)
 
 
 ngx_int_t
-ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *content)
+ngx_sync_msg_send_locked_module_index(ngx_str_t *title, ngx_buf_t *content,
+    ngx_uint_t index)
 {
     ngx_sync_msg_t        *msg;
     ngx_core_conf_t       *ccf;
@@ -488,6 +491,7 @@ ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *content)
     ngx_memzero(msg->pid, sizeof(ngx_pid_t) * ccf->worker_processes);
     msg->pid[0] = ngx_pid;
     msg->count++;
+    msg->module_index = index;
 
     msg->title.data = ngx_slab_alloc_locked(shpool, title->len);
     if (msg->title.data == NULL) {
@@ -588,9 +592,10 @@ ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid)
 
 static ngx_int_t
 ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool, ngx_str_t *title,
-    ngx_str_t *content)
+    ngx_str_t *content, ngx_uint_t index)
 {
-    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0, "sync msg dummy read filter");
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                   "sync msg dummy read filter, module index: [%ui]", index);
 
     return NGX_OK;
 }
