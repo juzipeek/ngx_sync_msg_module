@@ -9,6 +9,7 @@
 typedef struct {
     ngx_str_t                            shm_name;
     ngx_uint_t                           shm_size;
+    ngx_msec_t                           read_msg_timeout;
 } ngx_sync_msg_main_conf_t;
 
 
@@ -54,7 +55,22 @@ static ngx_int_t ngx_sync_msg_init_shm_zone(ngx_shm_zone_t *shm_zone,
 
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
-    ngx_null_command
+
+    { ngx_string("sync_msg_timeout"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_msec_slot,
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      offsetof(ngx_sync_msg_main_conf_t, read_msg_timeout),
+      NULL },
+
+    { ngx_string("sync_msg_shm_zone_size"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
+      ngx_conf_set_size_slot,
+      NGX_HTTP_MAIN_CONF_OFFSET,
+      offsetof(ngx_sync_msg_main_conf_t, shm_size),
+      NULL },
+
+      ngx_null_command
 };
 
 
@@ -105,6 +121,7 @@ ngx_sync_msg_create_main_conf(ngx_conf_t *cf)
     }
 
     conf->shm_size = NGX_CONF_UNSET_UINT;
+    conf->read_msg_timeout = NGX_CONF_UNSET_MSEC;
 
     return conf;
 }
