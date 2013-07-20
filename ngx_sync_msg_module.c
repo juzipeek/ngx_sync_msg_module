@@ -4,6 +4,9 @@
 
 
 #define NGX_SYNC_MSG_SHM_NAME_LEN 256
+#define ngx_sync_msg_add_timer(ev, timeout)                        \
+    if (!ngx_exiting && !ngx_quit) ngx_add_timer(ev, (timeout))
+
 
 
 typedef struct {
@@ -52,6 +55,13 @@ static ngx_int_t ngx_sync_msg_get_shm_name(ngx_str_t *shm_name,
     ngx_pool_t *pool, ngx_uint_t generation);
 static ngx_int_t ngx_sync_msg_init_shm_zone(ngx_shm_zone_t *shm_zone,
     void *data);
+static void ngx_sync_msg_read_msg(ngx_event_t *ev);
+static void ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid);
+static void ngx_sync_msg_read_msg_locked(ngx_event_t *ev);
+static void ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool,
+    ngx_sync_msg_t *msg);
+static ngx_int_t ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title,
+    ngx_str_t *content, ngx_uint_t flag);
 
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
@@ -93,7 +103,7 @@ ngx_module_t  ngx_sync_msg_module = {
     NGX_MODULE_V1,
     &ngx_sync_msg_module_ctx,    /* module context */
     ngx_sync_msg_commands,       /* module directives */
-    NGX_CORE_MODULE,             /* module type */
+    NGX_HTTP_MODULE,             /* module type */
     NULL,                        /* init master */
     NULL,                        /* init module */
     ngx_sync_msg_init_process,   /* init process */
@@ -105,7 +115,7 @@ ngx_module_t  ngx_sync_msg_module = {
 };
 
 
-ngx_flag_t ngx_sync_msg_enable = 0;  /* set to 1 in other modules */
+ngx_flag_t ngx_sync_msg_enable = 1;  /* set to 1 in other modules */
 static ngx_uint_t ngx_sync_msg_shm_generation = 0;
 static ngx_sync_msg_global_ctx_t ngx_sync_msg_global_ctx;
 
@@ -138,6 +148,10 @@ ngx_sync_msg_init_main_conf(ngx_conf_t *cf, void *conf)
 
     if (smcf->shm_size == NGX_CONF_UNSET_UINT) {
         smcf->shm_size = 2 * 1024 * 1024;
+    }
+
+    if (smcf->read_msg_timeout == NGX_CONF_UNSET_MSEC) {
+        smcf->read_msg_timeout = 1000;
     }
 
     return ngx_sync_msg_init_shm(cf, conf);
@@ -221,6 +235,98 @@ ngx_sync_msg_init_shm_zone(ngx_shm_zone_t *shm_zone, void *data)
 static ngx_int_t
 ngx_sync_msg_init_process(ngx_cycle_t *cycle)
 {
+    ngx_int_t                    i;
+    ngx_pid_t                    pid;
+    ngx_time_t                  *tp;
+    ngx_msec_t                   now;
+    ngx_event_t                 *timer;
+    ngx_core_conf_t             *ccf;
+    ngx_slab_pool_t             *shpool;
+    ngx_sync_msg_shctx_t        *sh;
+    ngx_sync_msg_status_t       *status;
+    ngx_sync_msg_main_conf_t    *smcf;
+
+    ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
+    smcf = ngx_http_cycle_get_module_main_conf(ngx_cycle, ngx_sync_msg_module);
+
+    if (!smcf || !ngx_sync_msg_enable) {
+        return NGX_OK;
+    }
+
+    timer = &ngx_sync_msg_global_ctx.msg_timer;
+    ngx_memzero(timer, sizeof(ngx_event_t));
+
+    timer->handler = ngx_sync_msg_read_msg;
+    timer->log = cycle->log;
+    timer->data = smcf;
+
+    ngx_add_timer(timer, smcf->read_msg_timeout);
+
+    shpool = ngx_sync_msg_global_ctx.shpool;
+    sh = ngx_sync_msg_global_ctx.sh;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    if (sh->status == NULL) {
+        sh->status = ngx_slab_alloc_locked(shpool,
+                         sizeof(ngx_sync_msg_status_t) * ccf->worker_processes);
+
+        if (sh->status == NULL) {
+            ngx_shmtx_unlock(&shpool->mutex);
+            return NGX_ERROR;
+        }
+
+        ngx_memzero(sh->status, sizeof(ngx_msec_t) * ccf->worker_processes);
+
+        ngx_shmtx_unlock(&shpool->mutex);
+        return NGX_OK;
+    }
+
+    ngx_shmtx_unlock(&shpool->mutex);
+
+    if (sh->version != 0) {
+        ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
+                      "[sync_msg] process start after abnormal exits");
+
+        ngx_msleep(smcf->read_msg_timeout * 2);
+
+        ngx_time_update();
+        tp = ngx_timeofday();
+        now = (ngx_msec_t) (tp->sec * 1000 + tp->msec);
+
+        ngx_shmtx_lock(&shpool->mutex);
+
+        if (sh->status == NULL) {
+            ngx_shmtx_unlock(&shpool->mutex);
+            return NGX_OK;
+        }
+
+        status = &sh->status[0];
+
+        for (i = 1; i < ccf->worker_processes; i++) {
+
+            ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
+                          "[sync_msg] process %P %ui %ui",
+                          sh->status[i].pid, status->time, sh->status[i].time);
+
+            if (status->time > sh->status[i].time) {
+                status = &sh->status[i];
+            }
+        }
+
+        pid = status->pid;
+        status->time = now;
+        status->pid = ngx_pid;
+
+        ngx_log_error(NGX_LOG_WARN, cycle->log, 0,
+                      "[sync_msg] new process is %P, old process is %P",
+                      ngx_pid, pid);
+
+        ngx_sync_msg_purge_msg(pid, ngx_pid);
+
+        ngx_shmtx_unlock(&shpool->mutex);
+    }
+
     return NGX_OK;
 }
 
@@ -229,4 +335,196 @@ static void
 ngx_sync_msg_exit_process(ngx_cycle_t *cycle)
 {
 
+}
+
+
+static void
+ngx_sync_msg_read_msg(ngx_event_t *ev)
+{
+    ngx_slab_pool_t           *shpool;
+    ngx_sync_msg_main_conf_t  *smcf;
+
+    smcf = ev->data;
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    ngx_sync_msg_read_msg_locked(ev);
+
+    ngx_shmtx_unlock(&shpool->mutex);
+
+    ngx_sync_msg_add_timer(ev, smcf->read_msg_timeout);
+}
+
+
+static void
+ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
+{
+    ngx_int_t               i, rc;
+    ngx_str_t               title, content;
+    ngx_flag_t              found;
+    ngx_time_t             *tp;
+    ngx_pool_t             *pool;
+    ngx_msec_t              now;
+    ngx_queue_t            *q, *t;
+    ngx_sync_msg_t         *msg;
+    ngx_core_conf_t        *ccf;
+    ngx_slab_pool_t        *shpool;
+    ngx_sync_msg_shctx_t   *sh;
+    ngx_sync_msg_status_t  *status;
+
+    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                   "[sync_msg] read msg %P", ngx_pid);
+
+    ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
+                                           ngx_core_module);
+
+    sh = ngx_sync_msg_global_ctx.sh;
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    sh->version++;
+
+    tp = ngx_timeofday();
+    now = (ngx_msec_t) (tp->sec * 1000 + tp->msec);
+
+    for (i = 0; i < ccf->worker_processes; i++) {
+        status = &sh->status[i];
+
+        if (status->pid == 0 || status->pid == ngx_pid) {
+
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                           "[sync_msg] process %P update time %ui",
+                           status->pid, status->time);
+
+            status->pid = ngx_pid;
+            status->time = now;
+            break;
+        }
+    }
+
+    if (ngx_queue_empty(&sh->msg_queue)) {
+        return;
+    }
+
+    pool = ngx_create_pool(ngx_pagesize, ev->log);
+    if (pool == NULL) {
+        return;
+    }
+
+    for (q = ngx_queue_last(&sh->msg_queue);
+         q != ngx_queue_sentinel(&sh->msg_queue);
+         q = ngx_queue_prev(q))
+    {
+        msg = ngx_queue_data(q, ngx_sync_msg_t, queue);
+
+        if (msg->count == ccf->worker_processes) {
+            t = ngx_queue_next(q); ngx_queue_remove(q); q = t;
+
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                                  "[sync_msg] destroy msg %V:%V",
+                                  &msg->title, &msg->content);
+
+            ngx_sync_msg_destroy_msg(shpool, msg);
+            continue;
+        }
+
+        found = 0;
+        for (i = 0; i < msg->count; i++) {
+
+            ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                           "[sync_msg] msg pids [%P]", msg->pid[i]);
+
+            if (msg->pid[i] == ngx_pid) {
+                found = 1;
+                break;
+            }
+        }
+
+        if (found) {
+            ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                           "[sync_msg] msg %V count %ui found",
+                           &msg->title, msg->count);
+            continue;
+        }
+
+        msg->pid[i] = ngx_pid;
+        msg->count++;
+
+        ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                       "[sync_msg] msg %V count %ui", &msg->title, msg->count);
+
+        title = msg->title;
+        content = msg->content;
+
+        rc = ngx_sync_msg_sync_cmd(pool, &title, &content, msg->flag);
+        if (rc != NGX_OK) {
+            ngx_log_error(NGX_LOG_ALERT, ev->log, 0,
+                          "[sync_msg] read msg error, may cause the "
+                          "config inaccuracy, title:%V, content:%V",
+                          &title, &content);
+        }
+    }
+
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ev->log, 0,
+                   "[sync_msg] read end");
+
+    ngx_destroy_pool(pool);
+
+    return;
+}
+
+
+static void
+ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool, ngx_sync_msg_t *msg)
+{
+    if (msg->pid) {
+        ngx_slab_free_locked(shpool, msg->pid);
+    }
+
+    if (msg->title.data) {
+        ngx_slab_free_locked(shpool, msg->title.data);
+    }
+
+    if (msg->content.data) {
+        ngx_slab_free_locked(shpool, msg->content.data);
+    }
+
+    ngx_slab_free_locked(shpool, msg);
+}
+
+
+static void
+ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid)
+{
+    ngx_int_t               i;
+    ngx_queue_t            *q;
+    ngx_sync_msg_t         *msg;
+    ngx_sync_msg_shctx_t   *sh;
+
+    sh = ngx_sync_msg_global_ctx.sh;
+
+    for (q = ngx_queue_last(&sh->msg_queue);
+         q != ngx_queue_sentinel(&sh->msg_queue);
+         q = ngx_queue_prev(q))
+    {
+        msg = ngx_queue_data(q, ngx_sync_msg_t, queue);
+
+        for (i = 0; i < msg->count; i++) {
+            if (msg->pid[i] == opid) {
+
+                ngx_log_error(NGX_LOG_INFO, ngx_cycle->log, 0,
+                              "[sync_msg] restore one pid conflict"
+                              " old: %P, new: %P", opid, npid);
+                msg->pid[i] = npid;
+            }
+        }
+    }
+}
+
+
+static ngx_int_t
+ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title, ngx_str_t *content,
+    ngx_uint_t flag)
+{
+    return NGX_ERROR;
 }
