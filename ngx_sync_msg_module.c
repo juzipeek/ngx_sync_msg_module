@@ -75,7 +75,7 @@ ngx_module_t  ngx_sync_msg_module = {
 };
 
 
-ngx_flag_t ngx_sync_msg_enable = 1;  /* set to 1 in other modules */
+ngx_flag_t ngx_sync_msg_enable = 0;  /* set to 1 in other modules */
 static ngx_uint_t ngx_sync_msg_shm_generation = 0;
 static ngx_sync_msg_global_ctx_t ngx_sync_msg_global_ctx;
 
