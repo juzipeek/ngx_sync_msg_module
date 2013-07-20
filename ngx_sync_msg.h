@@ -47,8 +47,8 @@ typedef ngx_int_t (*ngx_sync_msg_filter_pt) (ngx_pool_t *pool, ngx_str_t *title,
     ngx_str_t *content);
 
 
-ngx_int_t ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *body);
-ngx_int_t ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *body);
+ngx_int_t ngx_sync_msg_send(ngx_str_t *title, ngx_buf_t *content);
+ngx_int_t ngx_sync_msg_send_locked(ngx_str_t *title, ngx_buf_t *content);
 
 
 extern ngx_flag_t ngx_sync_msg_enable;
