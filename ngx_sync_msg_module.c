@@ -20,7 +20,11 @@ static void ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid);
 static void ngx_sync_msg_read_msg_locked(ngx_event_t *ev);
 static void ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool,
     ngx_sync_msg_t *msg);
-static ngx_int_t ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title,
+static ngx_int_t ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool,
+    ngx_str_t *title, ngx_str_t *content);
+
+
+ngx_int_t  (*ngx_sync_msg_top_read_filter) (ngx_pool_t *pool, ngx_str_t *title,
     ngx_str_t *content);
 
 
@@ -105,6 +109,8 @@ ngx_sync_msg_init_main_conf(ngx_conf_t *cf, void *conf)
     if (!ngx_sync_msg_enable) {
         return NGX_CONF_OK;
     }
+
+    ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
 
     if (smcf->shm_size == NGX_CONF_UNSET_UINT) {
         smcf->shm_size = 2 * 1024 * 1024;
@@ -414,7 +420,7 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
         title = msg->title;
         content = msg->content;
 
-        rc = ngx_sync_msg_sync_cmd(pool, &title, &content);
+        rc = ngx_sync_msg_top_read_filter(pool, &title, &content);
         if (rc != NGX_OK) {
             ngx_log_error(NGX_LOG_ALERT, ev->log, 0,
                           "[sync_msg] read msg error, may cause the "
@@ -579,7 +585,10 @@ ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid)
 
 
 static ngx_int_t
-ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title, ngx_str_t *content)
+ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool, ngx_str_t *title,
+    ngx_str_t *content)
 {
+    ngx_log_debug0(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0, "sync msg dummy read filter");
+
     return NGX_OK;
 }
