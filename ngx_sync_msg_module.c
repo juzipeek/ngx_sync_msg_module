@@ -4,9 +4,8 @@
 
 
 #define NGX_SYNC_MSG_SHM_NAME_LEN 256
-#define ngx_sync_msg_add_timer(ev, timeout)                        \
+#define ngx_sync_msg_add_timer(ev, timeout)                     \
     if (!ngx_exiting && !ngx_quit) ngx_add_timer(ev, (timeout))
-
 
 
 typedef struct {
@@ -41,7 +40,6 @@ typedef struct ngx_sync_msg_s {
     ngx_str_t                            title;
     ngx_str_t                            content;
     ngx_int_t                            count;
-    ngx_uint_t                           flag;
     ngx_pid_t                           *pid;
 } ngx_sync_msg_t;
 
@@ -61,7 +59,7 @@ static void ngx_sync_msg_read_msg_locked(ngx_event_t *ev);
 static void ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool,
     ngx_sync_msg_t *msg);
 static ngx_int_t ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title,
-    ngx_str_t *content, ngx_uint_t flag);
+    ngx_str_t *content);
 
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
@@ -456,7 +454,7 @@ ngx_sync_msg_read_msg_locked(ngx_event_t *ev)
         title = msg->title;
         content = msg->content;
 
-        rc = ngx_sync_msg_sync_cmd(pool, &title, &content, msg->flag);
+        rc = ngx_sync_msg_sync_cmd(pool, &title, &content);
         if (rc != NGX_OK) {
             ngx_log_error(NGX_LOG_ALERT, ev->log, 0,
                           "[sync_msg] read msg error, may cause the "
@@ -523,8 +521,7 @@ ngx_sync_msg_purge_msg(ngx_pid_t opid, ngx_pid_t npid)
 
 
 static ngx_int_t
-ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title, ngx_str_t *content,
-    ngx_uint_t flag)
+ngx_sync_msg_sync_cmd(ngx_pool_t *pool, ngx_str_t *title, ngx_str_t *content)
 {
-    return NGX_ERROR;
+    return NGX_OK;
 }
