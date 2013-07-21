@@ -605,7 +605,7 @@ ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool, ngx_str_t *title,
     ngx_str_t *content, ngx_uint_t index)
 {
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
-                   "sync msg dummy read filter, module index: [%ui]", index);
+                   "[sync_msg] dummy read filter, module index: [%ui]", index);
 
     return NGX_OK;
 }
@@ -614,5 +614,9 @@ ngx_sync_msg_dummy_read_filter(ngx_pool_t *pool, ngx_str_t *title,
 static ngx_int_t
 ngx_sync_msg_dummy_crashed_filter(ngx_pid_t opid, ngx_pid_t npid)
 {
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                   "[sync_msg] dummy crashed filter, "
+                   "old pid: [%ui], new pid: [%ui]", opid, npid);
+
     return NGX_OK;
 }
