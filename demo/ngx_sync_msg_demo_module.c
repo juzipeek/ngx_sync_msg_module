@@ -10,6 +10,7 @@ static ngx_int_t ngx_sync_msg_demo_pre_config(ngx_conf_t *cf);
 static ngx_int_t ngx_sync_msg_read_demo_filter(ngx_pool_t *pool,
     ngx_str_t *title, ngx_str_t *content, ngx_uint_t index);
 
+
 static ngx_command_t ngx_sync_msg_demo_commands[] = {
 
     { ngx_string("sync_msg_demo"),
