@@ -100,6 +100,9 @@ ngx_sync_msg_create_main_conf(ngx_conf_t *cf)
     conf->shm_size = NGX_CONF_UNSET_UINT;
     conf->read_msg_timeout = NGX_CONF_UNSET_MSEC;
 
+    ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
+    ngx_sync_msg_top_crashed_filter = ngx_sync_msg_dummy_crashed_filter;
+
     return conf;
 }
 
@@ -112,9 +115,6 @@ ngx_sync_msg_init_main_conf(ngx_conf_t *cf, void *conf)
     if (!ngx_sync_msg_enable) {
         return NGX_CONF_OK;
     }
-
-    ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
-    ngx_sync_msg_top_crashed_filter = ngx_sync_msg_dummy_crashed_filter;
 
     if (smcf->shm_size == NGX_CONF_UNSET_UINT) {
         smcf->shm_size = 2 * 1024 * 1024;
