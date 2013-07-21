@@ -162,6 +162,10 @@ static ngx_int_t
 ngx_sync_msg_read_demo_filter(ngx_pool_t *pool, ngx_str_t *title,
     ngx_str_t *content, ngx_uint_t index)
 {
+    if (index != ngx_sync_msg_demo_module.index) {
+        return ngx_sync_msg_next_read_filter(pool, title, content, index);
+    }
+
     ngx_log_debug1(NGX_LOG_DEBUG_HTTP, pool->log, 0,
                    "sync msg demo title: %V", title);
 

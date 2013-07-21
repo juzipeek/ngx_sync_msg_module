@@ -6,6 +6,7 @@
     if (!ngx_exiting && !ngx_quit) ngx_add_timer(ev, (timeout))
 
 
+static ngx_int_t ngx_sync_msg_pre_conf(ngx_conf_t *cf);
 static void *ngx_sync_msg_create_main_conf(ngx_conf_t *cf);
 static char *ngx_sync_msg_init_main_conf(ngx_conf_t *cf, void *conf);
 static ngx_int_t ngx_sync_msg_init_process(ngx_cycle_t *cycle);
@@ -52,7 +53,7 @@ static ngx_command_t  ngx_sync_msg_commands[] = {
 
 
 static ngx_http_module_t  ngx_sync_msg_module_ctx = {
-    NULL,                           /* preconfiguration */
+    ngx_sync_msg_pre_conf,          /* preconfiguration */
     NULL,                           /* postconfiguration */
 
     ngx_sync_msg_create_main_conf,  /* create main configuration */
@@ -87,6 +88,16 @@ static ngx_uint_t ngx_sync_msg_shm_generation = 0;
 static ngx_sync_msg_global_ctx_t ngx_sync_msg_global_ctx;
 
 
+static ngx_int_t
+ngx_sync_msg_pre_conf(ngx_conf_t *cf)
+{
+    ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
+    ngx_sync_msg_top_crashed_filter = ngx_sync_msg_dummy_crashed_filter;
+
+    return NGX_OK;
+}
+
+
 static void *
 ngx_sync_msg_create_main_conf(ngx_conf_t *cf)
 {
@@ -99,9 +110,6 @@ ngx_sync_msg_create_main_conf(ngx_conf_t *cf)
 
     conf->shm_size = NGX_CONF_UNSET_UINT;
     conf->read_msg_timeout = NGX_CONF_UNSET_MSEC;
-
-    ngx_sync_msg_top_read_filter = ngx_sync_msg_dummy_read_filter;
-    ngx_sync_msg_top_crashed_filter = ngx_sync_msg_dummy_crashed_filter;
 
     return conf;
 }
