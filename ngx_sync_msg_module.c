@@ -560,6 +560,107 @@ failed:
 }
 
 
+ngx_int_t
+ngx_sync_msg_special_send_module_index(ngx_str_t *title, ngx_buf_t *content,
+    ngx_uint_t index)
+{
+    ngx_int_t         rc;
+    ngx_slab_pool_t  *shpool;
+
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    ngx_shmtx_lock(&shpool->mutex);
+
+    rc = ngx_sync_msg_special_send_locked_module_index(title, content, index);
+
+    ngx_shmtx_unlock(&shpool->mutex);
+
+    return rc;
+}
+
+
+ngx_int_t
+ngx_sync_msg_special_send_locked_module_index(ngx_str_t *title,
+    ngx_buf_t *content, ngx_uint_t index)
+{
+    ngx_sync_msg_t        *msg;
+    ngx_core_conf_t       *ccf;
+    ngx_slab_pool_t       *shpool;
+    ngx_sync_msg_shctx_t  *sh;
+
+    ccf = (ngx_core_conf_t *) ngx_get_conf(ngx_cycle->conf_ctx,
+                                           ngx_core_module);
+
+    sh = ngx_sync_msg_global_ctx.sh;
+    shpool = ngx_sync_msg_global_ctx.shpool;
+
+    msg = ngx_slab_alloc_locked(shpool, sizeof(ngx_sync_msg_t));
+    if (msg == NULL) {
+        goto failed;
+    }
+
+    ngx_memzero(msg, sizeof(ngx_sync_msg_t));
+
+    msg->count = 0;
+    msg->pid = ngx_slab_alloc_locked(shpool,
+                                     sizeof(ngx_pid_t) * ccf->worker_processes);
+
+    if (msg->pid == NULL) {
+        goto failed;
+    }
+
+    ngx_memzero(msg->pid, sizeof(ngx_pid_t) * ccf->worker_processes);
+    msg->module_index = index;
+
+    msg->title.data = ngx_slab_alloc_locked(shpool, title->len);
+    if (msg->title.data == NULL) {
+        goto failed;
+    }
+
+    ngx_memcpy(msg->title.data, title->data, title->len);
+    msg->title.len = title->len;
+
+    if (content) {
+        msg->content.data = ngx_slab_alloc_locked(shpool,
+                                                  content->last - content->pos);
+        if (msg->content.data == NULL) {
+            goto failed;
+        }
+
+        ngx_memcpy(msg->content.data, content->pos,
+                   content->last - content->pos);
+
+        msg->content.len = content->last - content->pos;
+
+    } else {
+        msg->content.data = NULL;
+        msg->content.len = 0;
+    }
+
+    sh->version++;
+
+    if (sh->version == 0) {
+        sh->version = 1;
+    }
+
+    ngx_log_debug3(NGX_LOG_DEBUG_HTTP, ngx_cycle->log, 0,
+                   "[sync_msg] send msg %V count %ui version: %ui",
+                   &msg->title, msg->count, sh->version);
+
+    ngx_queue_insert_head(&sh->msg_queue, &msg->queue);
+
+    return NGX_OK;
+
+failed:
+
+    if (msg) {
+        ngx_sync_msg_destroy_msg(shpool, msg);
+    }
+
+    return NGX_ERROR;
+}
+
+
 static void
 ngx_sync_msg_destroy_msg(ngx_slab_pool_t *shpool, ngx_sync_msg_t *msg)
 {
