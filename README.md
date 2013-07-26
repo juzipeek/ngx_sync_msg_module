@@ -30,16 +30,22 @@ This directive set the size of share memory which used to store the commands.
 #define ngx_sync_msg_send_locked(t, c, m)                                      \
     ngx_sync_msg_send_locked_module_index(t, c, m.index)
 
+#define ngx_sync_special_msg_send(t, c, m)              \
+    ngx_sync_msg_special_send_module_index(t, c, m.index)
+#define ngx_sync_special_msg_send_locked(t, c, m)                              \
+    ngx_sync_msg_special_send_locked_module_index(t, c, m.index)
+
 
 ngx_int_t ngx_sync_msg_send_module_index(ngx_str_t *title, ngx_buf_t *content,
     ngx_uint_t index);
 ngx_int_t ngx_sync_msg_send_locked_module_index(ngx_str_t *title,
     ngx_buf_t *content, ngx_uint_t index);
+ngx_int_t ngx_sync_msg_special_send_module_index(ngx_str_t *title,
+    ngx_buf_t *content, ngx_uint_t index);
+ngx_int_t ngx_sync_msg_special_send_locked_module_index(ngx_str_t *title,
+    ngx_buf_t *content, ngx_uint_t index);
 
-typedef ngx_int_t (*ngx_sync_msg_read_filter_pt) (ngx_pool_t *pool,
-    ngx_str_t *title, ngx_str_t *content, ngx_uint_t index);
-typedef ngx_int_t (*ngx_sync_msg_crashed_filter_pt) (ngx_pid_t opid,
-    ngx_pid_t npid);
+
 
 extern ngx_flag_t ngx_sync_msg_enable;
 extern ngx_sync_msg_read_filter_pt ngx_sync_msg_top_read_filter;
