@@ -71,7 +71,6 @@ ngx_int_t ngx_sync_msg_special_send_locked_module_index(ngx_str_t *title,
     ngx_buf_t *content, ngx_uint_t index);
 
 
-
 extern ngx_flag_t ngx_sync_msg_enable;
 extern ngx_sync_msg_read_filter_pt ngx_sync_msg_top_read_filter;
 extern ngx_sync_msg_crashed_filter_pt ngx_sync_msg_top_crashed_filter;
