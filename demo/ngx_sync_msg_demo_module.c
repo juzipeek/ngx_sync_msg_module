@@ -115,12 +115,17 @@ ngx_sync_msg_demo_handler(ngx_http_request_t *r)
             return NGX_HTTP_INTERNAL_SERVER_ERROR;
         }
 
-        ngx_sync_msg_demo_str.data = ngx_pstrdup(ngx_sync_msg_demo_pool,
-                                                 &r->uri);
-        ngx_sync_msg_demo_str.len = r->uri.len;
+        if (r->uri.len == 2) {
+            ngx_sync_special_msg_send(&r->uri, NULL,
+                                      ngx_sync_msg_demo_module);
+        } else {
 
-        ngx_sync_msg_send(&ngx_sync_msg_demo_str, NULL,
-                          ngx_sync_msg_demo_module);
+            ngx_sync_msg_demo_str.data = ngx_pstrdup(ngx_sync_msg_demo_pool,
+                                                     &r->uri);
+            ngx_sync_msg_demo_str.len = r->uri.len;
+
+            ngx_sync_msg_send(&r->uri, NULL, ngx_sync_msg_demo_module);
+        }
     }
 
     out.buf = b;
