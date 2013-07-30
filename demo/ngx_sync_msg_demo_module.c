@@ -118,6 +118,8 @@ ngx_sync_msg_demo_handler(ngx_http_request_t *r)
         if (r->uri.len == 2) {
             ngx_sync_special_msg_send(&r->uri, NULL,
                                       ngx_sync_msg_demo_module);
+            ngx_str_set(&ngx_sync_msg_demo_str, "updating");
+
         } else {
 
             ngx_sync_msg_demo_str.data = ngx_pstrdup(ngx_sync_msg_demo_pool,

@@ -14,7 +14,7 @@ use Test::Nginx;
 
 my $NGINX = defined $ENV{TEST_NGINX_BINARY} ? $ENV{TEST_NGINX_BINARY}
         : '../nginx/objs/nginx';
-my $t = Test::Nginx->new()->plan(5);
+my $t = Test::Nginx->new()->plan(10);
 
 sub mhttp_get($;$;$;%) {
     my ($url, $port, %extra) = @_;
@@ -94,6 +94,13 @@ like(mhttp_get('/test', 8088), qr/test/, 'set test');
 like(mhttp_get('/', 8088), qr/test/m, 'test1');
 like(mhttp_get('/', 8088), qr/test/m, 'test2');
 like(mhttp_get('/', 8088), qr/test/m, 'test3');
+
+like(mhttp_get('/s', 8088), qr/updating/m, 'test s1');
+sleep(1);
+like(mhttp_get('/', 8088), qr/s/m, 'test s2');
+like(mhttp_get('/', 8088), qr/s/m, 'test s3');
+like(mhttp_get('/', 8088), qr/s/m, 'test s4');
+like(mhttp_get('/', 8088), qr/s/m, 'test s5');
 
 $t->stop();
 
