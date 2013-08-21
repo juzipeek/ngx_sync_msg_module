@@ -24,7 +24,6 @@ This directive set the size of share memory which used to store the commands.
 
 ## API
 ```c
-
 #define ngx_sync_msg_send(t, c, m)                                             \
     ngx_sync_msg_send_module_index(t, c, m.index)
 #define ngx_sync_msg_send_locked(t, c, m)                                      \
@@ -35,6 +34,9 @@ This directive set the size of share memory which used to store the commands.
 #define ngx_sync_special_msg_send_locked(t, c, m)                              \
     ngx_sync_msg_special_send_locked_module_index(t, c, m.index)
 
+
+void ngx_sync_msg_lock();
+void ngx_sync_msg_unlock();
 
 ngx_int_t ngx_sync_msg_send_module_index(ngx_str_t *title, ngx_buf_t *content,
     ngx_uint_t index);
