@@ -729,3 +729,15 @@ ngx_sync_msg_dummy_crashed_filter(ngx_pid_t opid, ngx_pid_t npid)
 
     return NGX_OK;
 }
+
+
+void ngx_sync_msg_lock()
+{
+    ngx_shmtx_lock(&ngx_sync_msg_global_ctx.shpool->mutex);
+}
+
+
+void ngx_sync_msg_unlock()
+{
+    ngx_shmtx_unlock(&ngx_sync_msg_global_ctx.shpool->mutex);
+}

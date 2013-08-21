@@ -61,6 +61,9 @@ typedef ngx_int_t (*ngx_sync_msg_crashed_filter_pt) (ngx_pid_t opid,
     ngx_sync_msg_special_send_locked_module_index(t, c, m.index)
 
 
+void ngx_sync_msg_lock();
+void ngx_sync_msg_unlock();
+
 ngx_int_t ngx_sync_msg_send_module_index(ngx_str_t *title, ngx_buf_t *content,
     ngx_uint_t index);
 ngx_int_t ngx_sync_msg_send_locked_module_index(ngx_str_t *title,
