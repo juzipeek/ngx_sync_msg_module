@@ -254,7 +254,8 @@ ngx_sync_msg_init_process(ngx_cycle_t *cycle)
             return NGX_ERROR;
         }
 
-        ngx_memzero(sh->status, sizeof(ngx_msec_t) * ccf->worker_processes);
+        ngx_memzero(sh->status,
+                    sizeof(ngx_sync_msg_status_t) * ccf->worker_processes);
 
         ngx_shmtx_unlock(&shpool->mutex);
         return NGX_OK;
