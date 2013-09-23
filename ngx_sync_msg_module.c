@@ -227,7 +227,7 @@ ngx_sync_msg_init_process(ngx_cycle_t *cycle)
     ccf = (ngx_core_conf_t *) ngx_get_conf(cycle->conf_ctx, ngx_core_module);
     smcf = ngx_http_cycle_get_module_main_conf(ngx_cycle, ngx_sync_msg_module);
 
-    if (!smcf || !ngx_sync_msg_enable) {
+    if (!smcf || !ngx_sync_msg_enable || ngx_process == NGX_PROCESS_HELPER) {
         return NGX_OK;
     }
 
