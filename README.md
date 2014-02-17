@@ -1,6 +1,9 @@
 ## Description
 This module provide a mechanism to sync messages between workers for your module.
 
+## TODO
+
+Try to support Lua API
 
 ## Directives
 
