@@ -34,6 +34,11 @@ ngx_int_t (*ngx_sync_msg_top_crashed_filter) (ngx_pid_t opid, ngx_pid_t npid);
 
 static ngx_command_t  ngx_sync_msg_commands[] = {
 
+    { ngx_string("sync_msg"),
+      NGX_HTTP_MAIN_CONF|NGX_CONF_FLAG,
+      ngx_conf_set_msec_slot,
+      0, 0, NULL },
+
     { ngx_string("sync_msg_timeout"),
       NGX_HTTP_MAIN_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_msec_slot,
